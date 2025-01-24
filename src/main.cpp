@@ -3,7 +3,7 @@
 #include <iostream>
 #include <vector>
 
-// Vertex shader source
+// Shader sources
 const char *vertexShaderSource = R"(
 #version 330 core
 layout (location = 0) in vec3 aPos;
@@ -13,86 +13,127 @@ void main() {
 }
 )";
 
-// Fragment shader source
 const char *fragmentShaderSource = R"(
 #version 330 core
 out vec4 FragColor;
 
 void main() {
-    FragColor = vec4(1.0, 0.5, 0.5, 1.0); // Grid line color (gray)
+    FragColor = vec4(1.0, 0.5, 0.5, 1.0); // Color
 }
 )";
 
-// Function to initialize buffers for rendering
-void initializeBuffers(unsigned int &VAO, unsigned int &VBO, unsigned int &EBO,
-                       const float *vertices, unsigned int vertexSize,
-                       const unsigned int *indices, unsigned int indexSize)
+// Function declarations
+void initializeOpenGL();
+GLFWwindow *createWindow(int width, int height, const char *title);
+unsigned int compileShader(GLenum type, const char *source);
+unsigned int createShaderProgram(const char *vertexSource, const char *fragmentSource);
+void initializeBuffers(unsigned int &VAO, unsigned int &VBO, unsigned int &EBO, 
+                       const float *vertices, unsigned int vertexSize, 
+                       const unsigned int *indices, unsigned int indexSize);
+void initializeGrid(unsigned int &VAO, unsigned int &VBO, int numLines, float spacing);
+void renderGrid(unsigned int VAO, int numLines);
+void renderPoint(unsigned int VAO, float size);
+void renderSquare(unsigned int VAO, unsigned int EBO);
+
+int main()
 {
-    glGenVertexArrays(1, &VAO);
-    glGenBuffers(1, &VBO);
-    glGenBuffers(1, &EBO);
+    // Initialize OpenGL and create a window
+    initializeOpenGL();
+    GLFWwindow *window = createWindow(800, 600, "OpenGL Example");
 
-    glBindVertexArray(VAO);
-
-    glBindBuffer(GL_ARRAY_BUFFER, VBO);
-    glBufferData(GL_ARRAY_BUFFER, vertexSize, vertices, GL_STATIC_DRAW);
-
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, indexSize, indices, GL_STATIC_DRAW);
-
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void *)0);
-    glEnableVertexAttribArray(0);
-
-    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void *)(3 * sizeof(float)));
-    glEnableVertexAttribArray(1);
-
-    glBindVertexArray(0); // Unbind VAO
-}
-
-// Function to initialize a grid
-void initializeGrid(unsigned int &VAO, unsigned int &VBO, int numLines, float spacing)
-{
-    std::vector<float> vertices;
-
-    // Horizontal lines
-    for (int i = -numLines; i <= numLines; ++i)
+    // Initialize GLEW
+    if (glewInit() != GLEW_OK)
     {
-        float y = i * spacing;
-        vertices.push_back(-1.0f);
-        vertices.push_back(y);
-        vertices.push_back(0.0f); // Start
-        vertices.push_back(1.0f);
-        vertices.push_back(y);
-        vertices.push_back(0.0f); // End
+        std::cerr << "Failed to initialize GLEW!" << std::endl;
+        return -1;
     }
 
-    // Vertical lines
-    for (int i = -numLines; i <= numLines; ++i)
+    // Initialize shader program
+    unsigned int shaderProgram = createShaderProgram(vertexShaderSource, fragmentShaderSource);
+    glUseProgram(shaderProgram);
+
+    // Dot (point) data
+    float dotVertices[] = {0.0f, 0.0f, 0.0f};
+    unsigned int dotIndices[] = {0};
+    unsigned int dotVAO, dotVBO, dotEBO;
+    initializeBuffers(dotVAO, dotVBO, dotEBO, dotVertices, sizeof(dotVertices), dotIndices, sizeof(dotIndices));
+
+    // Square data
+    float squareVertices[] = {
+        -0.05f, -0.05f, 0.0f,
+         0.05f, -0.05f, 0.0f,
+         0.05f,  0.05f, 0.0f,
+        -0.05f,  0.05f, 0.0f};
+    unsigned int squareIndices[] = {0, 1, 2, 0, 2, 3};
+    unsigned int squareVAO, squareVBO, squareEBO;
+    initializeBuffers(squareVAO, squareVBO, squareEBO, squareVertices, sizeof(squareVertices), squareIndices, sizeof(squareIndices));
+
+    // Grid data
+    unsigned int gridVAO, gridVBO;
+    int numLines = 10;
+    float spacing = 0.1f;
+    initializeGrid(gridVAO, gridVBO, numLines, spacing);
+
+    // Main render loop
+    while (!glfwWindowShouldClose(window))
     {
-        float x = i * spacing;
-        vertices.push_back(x);
-        vertices.push_back(-1.0f);
-        vertices.push_back(0.0f); // Start
-        vertices.push_back(x);
-        vertices.push_back(1.0f);
-        vertices.push_back(0.0f); // End
+        glClear(GL_COLOR_BUFFER_BIT);
+
+        // Render grid
+        renderGrid(gridVAO, numLines);
+
+        // Render dot
+        renderPoint(dotVAO, 10.0f);
+
+        // Render square (uncomment to display)
+        // renderSquare(squareVAO, squareEBO);
+
+        glfwSwapBuffers(window);
+        glfwPollEvents();
     }
 
-    glGenVertexArrays(1, &VAO);
-    glGenBuffers(1, &VBO);
+    // Cleanup
+    glDeleteVertexArrays(1, &gridVAO);
+    glDeleteBuffers(1, &gridVBO);
+    glDeleteVertexArrays(1, &dotVAO);
+    glDeleteBuffers(1, &dotVBO);
+    glDeleteBuffers(1, &dotEBO);
+    glDeleteVertexArrays(1, &squareVAO);
+    glDeleteBuffers(1, &squareVBO);
+    glDeleteBuffers(1, &squareEBO);
+    glDeleteProgram(shaderProgram);
+    glfwDestroyWindow(window);
+    glfwTerminate();
 
-    glBindVertexArray(VAO);
-    glBindBuffer(GL_ARRAY_BUFFER, VBO);
-
-    glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(float), vertices.data(), GL_STATIC_DRAW);
-
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void *)0);
-    glEnableVertexAttribArray(0);
-
-    glBindVertexArray(0); // Unbind VAO
+    return 0;
 }
 
-// Function to compile a shader and check for errors
+// Function definitions
+void initializeOpenGL()
+{
+    if (!glfwInit())
+    {
+        std::cerr << "Failed to initialize GLFW!" << std::endl;
+        exit(-1);
+    }
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+}
+
+GLFWwindow *createWindow(int width, int height, const char *title)
+{
+    GLFWwindow *window = glfwCreateWindow(width, height, title, nullptr, nullptr);
+    if (!window)
+    {
+        std::cerr << "Failed to create window!" << std::endl;
+        glfwTerminate();
+        exit(-1);
+    }
+    glfwMakeContextCurrent(window);
+    return window;
+}
+
 unsigned int compileShader(GLenum type, const char *source)
 {
     unsigned int shader = glCreateShader(type);
@@ -105,20 +146,16 @@ unsigned int compileShader(GLenum type, const char *source)
     if (!success)
     {
         glGetShaderInfoLog(shader, 512, nullptr, infoLog);
-        std::cerr << "ERROR::SHADER::COMPILATION_FAILED\n"
-                  << infoLog << std::endl;
+        std::cerr << "ERROR::SHADER::COMPILATION_FAILED\n" << infoLog << std::endl;
         exit(-1);
     }
-
     return shader;
 }
 
-// Function to create and link a shader program
 unsigned int createShaderProgram(const char *vertexSource, const char *fragmentSource)
 {
     unsigned int vertexShader = compileShader(GL_VERTEX_SHADER, vertexSource);
     unsigned int fragmentShader = compileShader(GL_FRAGMENT_SHADER, fragmentSource);
-
     unsigned int shaderProgram = glCreateProgram();
     glAttachShader(shaderProgram, vertexShader);
     glAttachShader(shaderProgram, fragmentShader);
@@ -130,112 +167,69 @@ unsigned int createShaderProgram(const char *vertexSource, const char *fragmentS
     if (!success)
     {
         glGetProgramInfoLog(shaderProgram, 512, nullptr, infoLog);
-        std::cerr << "ERROR::SHADER::PROGRAM::LINKING_FAILED\n"
-                  << infoLog << std::endl;
+        std::cerr << "ERROR::SHADER::PROGRAM::LINKING_FAILED\n" << infoLog << std::endl;
         exit(-1);
     }
 
     glDeleteShader(vertexShader);
     glDeleteShader(fragmentShader);
-
     return shaderProgram;
 }
 
-int main()
+void initializeBuffers(unsigned int &VAO, unsigned int &VBO, unsigned int &EBO,
+                       const float *vertices, unsigned int vertexSize,
+                       const unsigned int *indices, unsigned int indexSize)
 {
-    if (!glfwInit())
+    glGenVertexArrays(1, &VAO);
+    glGenBuffers(1, &VBO);
+    glGenBuffers(1, &EBO);
+
+    glBindVertexArray(VAO);
+    glBindBuffer(GL_ARRAY_BUFFER, VBO);
+    glBufferData(GL_ARRAY_BUFFER, vertexSize, vertices, GL_STATIC_DRAW);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, indexSize, indices, GL_STATIC_DRAW);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void *)0);
+    glEnableVertexAttribArray(0);
+    glBindVertexArray(0);
+}
+
+void initializeGrid(unsigned int &VAO, unsigned int &VBO, int numLines, float spacing)
+{
+    std::vector<float> vertices;
+    for (int i = -numLines; i <= numLines; ++i)
     {
-        std::cerr << "Failed to initialize GLFW!" << std::endl;
-        return -1;
+        float pos = i * spacing;
+        vertices.insert(vertices.end(), {-1.0f, pos, 0.0f, 1.0f, pos, 0.0f});
+        vertices.insert(vertices.end(), {pos, -1.0f, 0.0f, pos, 1.0f, 0.0f});
     }
 
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
-    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
+    glGenVertexArrays(1, &VAO);
+    glGenBuffers(1, &VBO);
 
-    GLFWwindow *window = glfwCreateWindow(800, 600, "OpenGL Example", nullptr, nullptr);
-    if (!window)
-    {
-        std::cerr << "Failed to create window!" << std::endl;
-        glfwTerminate();
-        return -1;
-    }
+    glBindVertexArray(VAO);
+    glBindBuffer(GL_ARRAY_BUFFER, VBO);
+    glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(float), vertices.data(), GL_STATIC_DRAW);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void *)0);
+    glEnableVertexAttribArray(0);
+    glBindVertexArray(0);
+}
 
-    glfwMakeContextCurrent(window);
+void renderGrid(unsigned int VAO, int numLines)
+{
+    glBindVertexArray(VAO);
+    glDrawArrays(GL_LINES, 0, (numLines * 2 + 1) * 4);
+}
 
-    if (glewInit() != GLEW_OK)
-    {
-        std::cerr << "Failed to initialize GLEW!" << std::endl;
-        return -1;
-    }
+void renderPoint(unsigned int VAO, float size)
+{
+    glPointSize(size);
+    glBindVertexArray(VAO);
+    glDrawArrays(GL_POINTS, 0, 1);
+}
 
-    // Dot (point) data
-    float dotVertices[] = {0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f};
-    unsigned int dotIndices[] = {0};
-
-    // Square data
-    float squareVertices[] = {
-        -0.05f, -0.05f, 0.0f, 1.0f, 0.0f, 0.0f,
-        0.05f, -0.05f, 0.0f, 1.0f, 0.0f, 0.0f,
-        0.05f, 0.05f, 0.0f, 1.0f, 0.0f, 0.0f,
-        -0.05f, 0.05f, 0.0f, 1.0f, 0.0f, 0.0f};
-    unsigned int squareIndices[] = {0, 1, 2, 0, 2, 3};
-
-    // Initialize buffers
-    unsigned int dotVAO, dotVBO, dotEBO;
-    initializeBuffers(dotVAO, dotVBO, dotEBO, dotVertices, sizeof(dotVertices), dotIndices, sizeof(dotIndices));
-
-    unsigned int squareVAO, squareVBO, squareEBO;
-    initializeBuffers(squareVAO, squareVBO, squareEBO, squareVertices, sizeof(squareVertices), squareIndices, sizeof(squareIndices));
-
-    unsigned int gridVAO, gridVBO;
-    int numLines = 10;    // Number of lines in each direction
-    float spacing = 0.1f; // Spacing between lines
-
-    initializeGrid(gridVAO, gridVBO, numLines, spacing);
-
-    // Create shader program
-    unsigned int shaderProgram = createShaderProgram(vertexShaderSource, fragmentShaderSource);
-
-    // Main render loop
-    while (!glfwWindowShouldClose(window))
-    {
-        glClear(GL_COLOR_BUFFER_BIT);
-
-        glUseProgram(shaderProgram);
-
-        glBindVertexArray(gridVAO);
-        glDrawArrays(GL_LINES, 0, (numLines * 2 + 1) * 4);
-
-        // Draw the dot
-        glPointSize(10.0f);
-        glBindVertexArray(dotVAO);
-        glDrawArrays(GL_POINTS, 0, 1);
-
-        // Draw the square
-        // glBindVertexArray(squareVAO);
-        // glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
-
-        glfwSwapBuffers(window);
-        glfwPollEvents();
-    }
-
-    // Cleanup
-    glDeleteVertexArrays(1, &gridVAO);
-    glDeleteBuffers(1, &gridVBO);
-
-    glDeleteVertexArrays(1, &dotVAO);
-    glDeleteBuffers(1, &dotVBO);
-    glDeleteBuffers(1, &dotEBO);
-
-    glDeleteVertexArrays(1, &squareVAO);
-    glDeleteBuffers(1, &squareVBO);
-    glDeleteBuffers(1, &squareEBO);
-
-    glDeleteProgram(shaderProgram);
-    glfwDestroyWindow(window);
-    glfwTerminate();
-
-    return 0;
+void renderSquare(unsigned int VAO, unsigned int EBO)
+{
+    glBindVertexArray(VAO);
+    glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
 }
